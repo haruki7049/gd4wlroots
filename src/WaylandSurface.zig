@@ -21,9 +21,13 @@ pub fn create(
     const sprite = Sprite2D.init();
     const texture = ImageTexture.init();
     const image = Image.create(1, 1, false, .format_rgba8).?;
+    const viewport = parent.getViewport().?;
+    const screen_size = viewport.getVisibleRect().size;
 
     texture.setImage(image);
     sprite.setTexture(Texture2D.upcast(texture));
+    sprite.setCentered(true);
+    sprite.setPosition(.{ .x = screen_size.x / 2.0, .y = screen_size.y / 2.0 });
     parent.addChild(.upcast(sprite), .{});
 
     self.* = .{
