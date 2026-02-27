@@ -16,8 +16,8 @@ allocator: Allocator,
 base: *Node2D,
 
 /// wlroots core objects — valid after _ready(), null before.
-display: ?*c.wl.wl_display = null,
-event_loop: ?*c.wl.wl_event_loop = null,
+display: ?*c.wlr.wl_display = null,
+event_loop: ?*c.wlr.wl_event_loop = null,
 backend: ?*c.wlr.wlr_backend = null,
 renderer: ?*c.wlr.wlr_renderer = null,
 allocator_wlr: ?*c.wlr.wlr_allocator = null,
@@ -31,7 +31,7 @@ socket_name: [64]u8 = std.mem.zeroes([64]u8),
 surfaces: SurfaceMap,
 
 /// wlroots signal listeners.
-new_surface_listener: c.wl.wl_listener = undefined,
+new_surface_listener: c.wlr.wl_listener = undefined,
 
 // ── gdzig class registration ──────────────────────────────────────────────
 
@@ -75,7 +75,7 @@ pub fn _exitTree(self: *WaylandCompositor) void {
 pub fn _process(self: *WaylandCompositor, _: f64) void {
     const el = self.event_loop orelse return;
     // dispatch with 0 ms timeout — non-blocking, handle all pending events.
-    _ = c.wl.wl_event_loop_dispatch(el, 0);
+    _ = c.wlr.wl_event_loop_dispatch(el, 0);
     self.collectDeadSurfaces();
 }
 
@@ -92,18 +92,22 @@ pub fn getSocketName(self: *WaylandCompositor) String {
 
 fn initWayland(self: *WaylandCompositor) !void {
     // Create the wl_display (Wayland server).
-    const display = c.wl.wl_display_create() orelse return error.DisplayCreateFailed;
+    const display = c.wlr.wl_display_create() orelse return error.DisplayCreateFailed;
     self.display = display;
-    self.event_loop = c.wl.wl_display_get_event_loop(display);
+
+    // wlroots 0.19 changed wlr_headless_backend_create() to take wl_event_loop*
+    // instead of wl_display*, so we must retrieve the event loop first.
+    const event_loop = c.wlr.wl_display_get_event_loop(display);
+    self.event_loop = event_loop;
 
     // Create a headless wlroots backend (no GPU device needed for SHM).
-    const backend = c.wlr.wlr_headless_backend_create(display) orelse return error.BackendCreateFailed;
+    const backend = c.wlr.wlr_headless_backend_create(event_loop) orelse return error.BackendCreateFailed;
     self.backend = backend;
 
     // Create a no-op wlr_renderer (not used for SHM, but wlroots requires one).
     const renderer = c.wlr.wlr_renderer_autocreate(backend) orelse return error.RendererCreateFailed;
     self.renderer = renderer;
-    c.wlr.wlr_renderer_init_wl_display(renderer, display);
+    _ = c.wlr.wlr_renderer_init_wl_display(renderer, display);
 
     // Allocator (needed by compositor).
     self.allocator_wlr = c.wlr.wlr_allocator_autocreate(backend, renderer);
@@ -118,12 +122,12 @@ fn initWayland(self: *WaylandCompositor) !void {
 
     // Listen for new XDG surfaces (new application windows).
     self.new_surface_listener.notify = onNewXdgSurface;
-    c.wl.wl_signal_add(&xdg_shell.events.new_toplevel, &self.new_surface_listener);
+    c.wlr.wl_signal_add(&xdg_shell.events.new_toplevel, &self.new_surface_listener);
 
     // Start the backend and open a socket.
     if (c.wlr.wlr_backend_start(backend) == 0) return error.BackendStartFailed;
 
-    const socket_cstr = c.wl.wl_display_add_socket_auto(display) orelse return error.SocketFailed;
+    const socket_cstr = c.wlr.wl_display_add_socket_auto(display) orelse return error.SocketFailed;
     const socket_slice = std.mem.span(socket_cstr);
     const copy_len = @min(socket_slice.len, self.socket_name.len - 1);
     @memcpy(self.socket_name[0..copy_len], socket_slice[0..copy_len]);
@@ -141,7 +145,7 @@ fn shutdownWayland(self: *WaylandCompositor) void {
     self.surfaces = .{};
 
     if (self.display) |d| {
-        c.wl.wl_display_destroy(d);
+        c.wlr.wl_display_destroy(d);
         self.display = null;
     }
 }
@@ -167,7 +171,7 @@ fn collectDeadSurfaces(self: *WaylandCompositor) void {
 // ── wlroots signal callbacks ──────────────────────────────────────────────
 
 /// Called when an XDG toplevel (application window) is created.
-fn onNewXdgSurface(listener: [*c]c.wl.wl_listener, data: ?*anyopaque) callconv(.C) void {
+fn onNewXdgSurface(listener: [*c]c.wlr.wl_listener, data: ?*anyopaque) callconv(.C) void {
     const self = c.listenerParent(WaylandCompositor, "new_surface_listener", listener);
     const toplevel: *c.wlr.wlr_xdg_toplevel = @ptrCast(@alignCast(data orelse return));
     const wlr_surface = toplevel.base.surface;

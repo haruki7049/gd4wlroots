@@ -15,10 +15,10 @@ const WaylandSurface = @This();
 wlr_surface: *c.wlr.wlr_surface,
 
 /// Listener attached to wlr_surface.events.commit.
-commit_listener: c.wl.wl_listener,
+commit_listener: c.wlr.wl_listener,
 
 /// Listener attached to wlr_surface.events.destroy.
-destroy_listener: c.wl.wl_listener,
+destroy_listener: c.wlr.wl_listener,
 
 // ── Godot state ───────────────────────────────────────────────────────────
 
@@ -71,18 +71,18 @@ pub fn create(
 
     // Attach wlroots signal listeners.
     self.commit_listener.notify = onCommit;
-    c.wl.wl_signal_add(&wlr_surface.events.commit, &self.commit_listener);
+    c.wlr.wl_signal_add(&wlr_surface.events.commit, &self.commit_listener);
 
     self.destroy_listener.notify = onDestroy;
-    c.wl.wl_signal_add(&wlr_surface.events.destroy, &self.destroy_listener);
+    c.wlr.wl_signal_add(&wlr_surface.events.destroy, &self.destroy_listener);
 
     return self;
 }
 
 /// Free all resources and detach listeners.
 pub fn destroy(self: *WaylandSurface, allocator: Allocator) void {
-    c.wl.wl_list_remove(&self.commit_listener.link);
-    c.wl.wl_list_remove(&self.destroy_listener.link);
+    c.wlr.wl_list_remove(&self.commit_listener.link);
+    c.wlr.wl_list_remove(&self.destroy_listener.link);
 
     // Clean up Godot resources
     self.sprite.destroy();
@@ -128,7 +128,7 @@ fn uploadShmBuffer(self: *WaylandSurface, buf: *c.wlr.wlr_shm_buffer) void {
 // ── wlroots signal callbacks ──────────────────────────────────────────────
 
 /// Called by wlroots whenever the client commits a new buffer.
-fn onCommit(listener: [*c]c.wl.wl_listener, _: ?*anyopaque) callconv(.C) void {
+fn onCommit(listener: [*c]c.wlr.wl_listener, _: ?*anyopaque) callconv(.C) void {
     const self = c.listenerParent(WaylandSurface, "commit_listener", listener);
     const surface = self.wlr_surface;
 
@@ -143,11 +143,11 @@ fn onCommit(listener: [*c]c.wl.wl_listener, _: ?*anyopaque) callconv(.C) void {
 /// Called by wlroots when the client destroys its surface.
 /// We cannot free ourselves here (we're inside a C callback), so we just
 /// mark ourselves as dead; WaylandCompositor cleans up on the next _process().
-fn onDestroy(listener: [*c]c.wl.wl_listener, _: ?*anyopaque) callconv(.C) void {
+fn onDestroy(listener: [*c]c.wlr.wl_listener, _: ?*anyopaque) callconv(.C) void {
     const self = c.listenerParent(WaylandSurface, "destroy_listener", listener);
     // Detach listeners immediately to prevent double-fire.
-    c.wl.wl_list_remove(&self.commit_listener.link);
-    c.wl.wl_list_remove(&self.destroy_listener.link);
+    c.wlr.wl_list_remove(&self.commit_listener.link);
+    c.wlr.wl_list_remove(&self.destroy_listener.link);
     // Hide the sprite so there is no visual artifact until GC.
     self.sprite.setVisible(false);
     // NOTE: actual memory free happens in WaylandCompositor.collectDeadSurfaces().
