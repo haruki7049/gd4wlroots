@@ -11,6 +11,7 @@ pub const wlr = @cImport({
     // Disable the wlroots log macro so it doesn't conflict with Zig's
     @cDefine("WLR_USE_UNSTABLE", "1");
     @cInclude("wlr/backend.h");
+    @cInclude("wlr/backend/headless.h"); // provides wlr_headless_backend_create()
     @cInclude("wlr/render/allocator.h");
     @cInclude("wlr/render/wlr_renderer.h");
     @cInclude("wlr/types/wlr_compositor.h");

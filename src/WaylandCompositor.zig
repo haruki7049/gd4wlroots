@@ -148,15 +148,15 @@ fn shutdownWayland(self: *WaylandCompositor) void {
 
 /// Remove surfaces whose wlr_surface was destroyed (marked dead in onDestroy).
 fn collectDeadSurfaces(self: *WaylandCompositor) void {
-    var to_remove = std.ArrayList(*c.wlr.wlr_surface).init(self.allocator);
-    defer to_remove.deinit();
+    var to_remove: std.array_list.Aligned(*c.wlr.wlr_surface, null) = .empty;
+    defer to_remove.deinit(self.allocator);
 
     var it = self.surfaces.iterator();
     while (it.next()) |entry| {
         // A surface is "dead" when we cleared its wlr_surface pointer in onDestroy.
         if (@intFromPtr(entry.value_ptr.*.wlr_surface) == 0) {
             entry.value_ptr.*.destroy(self.allocator);
-            to_remove.append(entry.key_ptr.*) catch {};
+            to_remove.append(self.allocator, entry.key_ptr.*) catch {};
         }
     }
     for (to_remove.items) |key| {
