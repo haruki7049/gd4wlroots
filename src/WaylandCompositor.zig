@@ -18,23 +18,6 @@ new_surface_listener: c.wlr.wl_listener = undefined,
 pub fn register(r: *Registry) void {
     const class = r.createClass(WaylandCompositor, r.allocator, .auto);
     class.addMethod("get_socket_name", .auto);
-    class.addMethod("poll_wayland", .auto);
-    class.addMethod("init_compositor", .auto);
-}
-
-pub fn initCompositor(self: *WaylandCompositor) void {
-    self.initWayland() catch |err| {
-        std.log.err("WaylandCompositor: failed to init Wayland: {}", .{err});
-    };
-}
-
-pub fn pollWayland(self: *WaylandCompositor) void {
-    const display = self.display orelse return;
-    const el = self.event_loop orelse return;
-
-    _ = c.wlr.wl_event_loop_dispatch(el, 0);
-    c.wlr.wl_display_flush_clients(display);
-    self.collectDeadSurfaces();
 }
 
 pub fn create(allocator: *Allocator) !*WaylandCompositor {
@@ -62,22 +45,12 @@ pub fn _ready(self: *WaylandCompositor) void {
     };
 }
 
-pub fn _exitTree(self: *WaylandCompositor) void {
-    self.shutdownWayland();
-}
-
 pub fn _process(self: *WaylandCompositor, _: f64) void {
-    const display = self.display orelse {
-        std.log.info("_process: display is null", .{});
-        return;
-    };
-    const el = self.event_loop orelse {
-        std.log.info("_process: event_loop is null", .{});
-        return;
-    };
+    const display = self.display orelse return;
+    const el = self.event_loop orelse return;
 
     _ = c.wlr.wl_event_loop_dispatch(el, 0);
-    _ = c.wlr.wl_display_flush_clients(display);
+    c.wlr.wl_display_flush_clients(display);
     self.collectDeadSurfaces();
 }
 
@@ -174,8 +147,6 @@ fn onNewXdgSurface(listener: [*c]c.wlr.wl_listener, data: ?*anyopaque) callconv(
     const self = c.listenerParent(WaylandCompositor, "new_surface_listener", listener);
     const toplevel: *c.wlr.wlr_xdg_toplevel = @ptrCast(@alignCast(data orelse return));
     const wlr_surface = toplevel.*.base.*.surface;
-
-    std.log.info("onNewXdgSurface: new toplevel", .{});
 
     const surf = WaylandSurface.create(
         self.allocator,
