@@ -77,6 +77,11 @@ fn uploadBuffer(self: *WaylandSurface, buffer: *c.wlr.wlr_buffer) void {
 
     if (w == 0 or h == 0) return;
 
+    const row_bytes: usize = @as(usize, w) * 4;
+    const image_size: usize = @as(usize, w) * @as(usize, h) * 4;
+
+    std.log.info("uploadBuffer: w={} h={} stride={} row_bytes={} image_size={}", .{ w, h, stride, row_bytes, image_size });
+
     if (w != self.width or h != self.height) {
         if (self.image.unreference()) self.image.destroy();
         self.image = Image.create(@intCast(w), @intCast(h), false, .format_rgba8).?;
@@ -85,12 +90,20 @@ fn uploadBuffer(self: *WaylandSurface, buffer: *c.wlr.wlr_buffer) void {
         self.texture.setImage(self.image);
     }
 
-    const byte_count = h * stride;
-    const src: [*]const u8 = @ptrCast(data.?);
-
     const imagePtrw = godot.raw.imagePtrw orelse return;
     const dst = imagePtrw(self.image);
-    @memcpy(dst[0..byte_count], src[0..byte_count]);
+    const src: [*]const u8 = @ptrCast(data.?);
+
+    if (stride == row_bytes) {
+        @memcpy(dst[0..image_size], src[0..image_size]);
+    } else {
+        var y: usize = 0;
+        while (y < h) : (y += 1) {
+            const dst_off = y * row_bytes;
+            const src_off = y * stride;
+            @memcpy(dst[dst_off..][0..row_bytes], src[src_off..][0..row_bytes]);
+        }
+    }
 
     self.texture.update(self.image);
 }
