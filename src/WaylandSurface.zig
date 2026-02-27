@@ -127,6 +127,9 @@ fn onCommit(listener: [*c]c.wlr.wl_listener, _: ?*anyopaque) callconv(.c) void {
 
     std.log.info("onCommit: buffer found, uploading", .{});
     self.uploadBuffer(&surface_buffer.*.base);
+
+    var now: c.wlr.struct_timespec = .{ .tv_sec = 0, .tv_nsec = 0 };
+    c.wlr.wlr_surface_send_frame_done(self.wlr_surface, &now);
 }
 
 fn onDestroy(listener: [*c]c.wlr.wl_listener, _: ?*anyopaque) callconv(.c) void {
