@@ -1,3 +1,6 @@
 [gd_scene format=3 uid="uid://cc0r76iqvgvnh"]
 
-[node name="Node2D" type="WaylandCompositor" unique_id=1914187046]
+[ext_resource type="Script" uid="uid://c73qcii7x8w77" path="res://src/scripts/main.gd" id="1_kkvs4"]
+
+[node name="WaylandCompositor" type="WaylandCompositor" unique_id=1112754547]
+script = ExtResource("1_kkvs4")

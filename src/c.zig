@@ -6,6 +6,7 @@ pub const wlr = @cImport({
     @cInclude("wlr/render/allocator.h");
     @cInclude("wlr/render/wlr_renderer.h");
     @cInclude("wlr/types/wlr_compositor.h");
+    @cInclude("wlr/types/wlr_subcompositor.h");
     @cInclude("wlr/types/wlr_shm.h");
     @cInclude("wlr/types/wlr_xdg_shell.h");
     @cInclude("wlr/types/wlr_buffer.h");

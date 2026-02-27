@@ -38,6 +38,23 @@ new_surface_listener: c.wlr.wl_listener = undefined,
 pub fn register(r: *Registry) void {
     const class = r.createClass(WaylandCompositor, r.allocator, .auto);
     class.addMethod("get_socket_name", .auto);
+    class.addMethod("poll_wayland", .auto);
+    class.addMethod("init_compositor", .auto);
+}
+
+pub fn initCompositor(self: *WaylandCompositor) void {
+    self.initWayland() catch |err| {
+        std.log.err("WaylandCompositor: failed to init Wayland: {}", .{err});
+    };
+}
+
+pub fn pollWayland(self: *WaylandCompositor) void {
+    const display = self.display orelse return;
+    const el = self.event_loop orelse return;
+
+    _ = c.wlr.wl_event_loop_dispatch(el, 0);
+    c.wlr.wl_display_flush_clients(display);
+    self.collectDeadSurfaces();
 }
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -62,6 +79,8 @@ pub fn destroy(self: *WaylandCompositor, allocator: *Allocator) void {
 // ── Godot callbacks ───────────────────────────────────────────────────────
 
 pub fn _ready(self: *WaylandCompositor) void {
+    self.base.setProcess(true);
+
     self.initWayland() catch |err| {
         std.log.err("WaylandCompositor: failed to init Wayland: {}", .{err});
     };
@@ -73,9 +92,18 @@ pub fn _exitTree(self: *WaylandCompositor) void {
 
 /// Drive the Wayland event loop.  Called every frame by Godot.
 pub fn _process(self: *WaylandCompositor, _: f64) void {
-    const el = self.event_loop orelse return;
+    const display = self.display orelse {
+        std.log.info("_process: display is null", .{});
+        return;
+    };
+    const el = self.event_loop orelse {
+        std.log.info("_process: event_loop is null", .{});
+        return;
+    };
+
     // dispatch with 0 ms timeout — non-blocking, handle all pending events.
     _ = c.wlr.wl_event_loop_dispatch(el, 0);
+    _ = c.wlr.wl_display_flush_clients(display);
     self.collectDeadSurfaces();
 }
 
@@ -114,6 +142,7 @@ fn initWayland(self: *WaylandCompositor) !void {
 
     // Advertise wl_compositor and wl_shm globals to clients.
     self.compositor = c.wlr.wlr_compositor_create(display, 5, renderer);
+    _ = c.wlr.wlr_subcompositor_create(display);
     // wlroots 0.19 added an explicit formats_len argument to wlr_shm_create().
     _ = c.wlr.wlr_renderer_init_wl_shm(renderer, display);
 
@@ -144,6 +173,12 @@ fn shutdownWayland(self: *WaylandCompositor) void {
     }
     self.surfaces.deinit(self.allocator);
     self.surfaces = .{};
+
+    // Remove listener before destroying display
+    if (self.xdg_shell != null) {
+        c.wlr.wl_list_remove(&self.new_surface_listener.link);
+        self.xdg_shell = null;
+    }
 
     if (self.display) |d| {
         c.wlr.wl_display_destroy(d);
