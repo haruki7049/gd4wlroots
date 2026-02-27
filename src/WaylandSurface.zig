@@ -77,10 +77,7 @@ fn uploadBuffer(self: *WaylandSurface, buffer: *c.wlr.wlr_buffer) void {
 
     if (w == 0 or h == 0) return;
 
-    const row_bytes: usize = @as(usize, w) * 4;
-    const image_size: usize = @as(usize, w) * @as(usize, h) * 4;
-
-    std.log.info("uploadBuffer: w={} h={} stride={} row_bytes={} image_size={}", .{ w, h, stride, row_bytes, image_size });
+    std.log.info("uploadBuffer: w={} h={} stride={} format=0x{x}", .{ w, h, stride, format });
 
     if (w != self.width or h != self.height) {
         if (self.image.unreference()) self.image.destroy();
@@ -94,16 +91,26 @@ fn uploadBuffer(self: *WaylandSurface, buffer: *c.wlr.wlr_buffer) void {
     const dst = imagePtrw(self.image);
     const src: [*]const u8 = @ptrCast(data.?);
 
-    if (stride == row_bytes) {
-        @memcpy(dst[0..image_size], src[0..image_size]);
-    } else {
-        var y: usize = 0;
-        while (y < h) : (y += 1) {
-            const dst_off = y * row_bytes;
-            const src_off = y * stride;
-            @memcpy(dst[dst_off..][0..row_bytes], src[src_off..][0..row_bytes]);
+    var y: usize = 0;
+    while (y < h) : (y += 1) {
+        var x: usize = 0;
+        while (x < w) : (x += 1) {
+            const src_off = y * stride + x * 4;
+            const dst_off = (y * @as(usize, w) + x) * 4;
+
+            // XRGB8888: src = B, G, R, X -> dst = R, G, B, A
+            dst[dst_off + 0] = src[src_off + 2]; // R
+            dst[dst_off + 1] = src[src_off + 1]; // G
+            dst[dst_off + 2] = src[src_off + 0]; // B
+            dst[dst_off + 3] = 255; // A
         }
     }
+
+    const mid_off = ((@as(usize, h) / 2) * @as(usize, w) + @as(usize, w) / 2) * 4;
+    std.log.info("pixel[0,0] RGBA=({},{},{},{}) pixel[center] RGBA=({},{},{},{})", .{
+        dst[0],       dst[1],           dst[2],           dst[3],
+        dst[mid_off], dst[mid_off + 1], dst[mid_off + 2], dst[mid_off + 3],
+    });
 
     self.texture.update(self.image);
 }

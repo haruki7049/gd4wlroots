@@ -3,13 +3,14 @@ extends WaylandCompositor
 var _printed := false
 
 func _ready() -> void:
-	# Zig 側の初期化を明示的に呼ぶ
 	init_compositor()
 	set_process(true)
 	print("_ready done, socket=", get_socket_name())
 
+	# 背景を明るい青にして foot と区別する
+	RenderingServer.set_default_clear_color(Color(0.3, 0.5, 0.8))
+
 func _process(delta: float) -> void:
-	# Wayland イベントループを回す
 	poll_wayland()
 
 	if not _printed:
@@ -24,6 +25,8 @@ func _process(delta: float) -> void:
 			var child := get_child(i)
 			if child is Sprite2D:
 				var sp := child as Sprite2D
+				sp.centered = false
+				sp.position = Vector2(0, 0)
 				var tex := sp.texture
 				if tex:
 					print("  ", child.name, " tex_size=", tex.get_size(),
