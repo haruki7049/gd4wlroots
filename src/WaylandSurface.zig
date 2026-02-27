@@ -82,6 +82,7 @@ fn uploadBuffer(self: *WaylandSurface, buffer: *c.wlr.wlr_buffer) void {
         self.image = Image.create(@intCast(w), @intCast(h), false, .format_rgba8).?;
         self.width = w;
         self.height = h;
+        self.texture.setImage(self.image);
     }
 
     const byte_count = h * stride;
