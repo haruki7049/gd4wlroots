@@ -115,8 +115,7 @@ fn initWayland(self: *WaylandCompositor) !void {
     // Advertise wl_compositor and wl_shm globals to clients.
     self.compositor = c.wlr.wlr_compositor_create(display, 5, renderer);
     // wlroots 0.19 added an explicit formats_len argument to wlr_shm_create().
-    const shm_formats = [_]u32{ c.wlr.WL_SHM_FORMAT_ARGB8888, c.wlr.WL_SHM_FORMAT_XRGB8888 };
-    _ = c.wlr.wlr_shm_create(display, 1, &shm_formats, shm_formats.len);
+    _ = c.wlr.wlr_renderer_init_wl_shm(renderer, display);
 
     // XDG Shell — handles modern Wayland application windows.
     const xdg_shell = c.wlr.wlr_xdg_shell_create(display, 3) orelse return error.XdgShellCreateFailed;
