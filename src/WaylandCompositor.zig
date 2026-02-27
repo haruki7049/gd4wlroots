@@ -1,21 +1,8 @@
-/// WaylandCompositor is a Godot Node2D that acts as a Wayland compositor.
-///
-/// Add it to your scene tree and it will:
-///   - Create a wl_display and advertise a WAYLAND_DISPLAY socket
-///   - Accept XDG-Shell client windows and display each as a Sprite2D child
-///   - Drive the Wayland event loop from Godot's _process() callback
-///
-/// This implementation uses SHM buffers with CPU copy (one memcpy per frame
-/// per surface).  DMA-BUF / zero-copy can be added later via
-/// texture_create_from_native_handle() once a Vulkan path is validated.
 const WaylandCompositor = @This();
-
-// ── Fields ────────────────────────────────────────────────────────────────
 
 allocator: Allocator,
 base: *Node2D,
 
-/// wlroots core objects — valid after _ready(), null before.
 display: ?*c.wlr.wl_display = null,
 event_loop: ?*c.wlr.wl_event_loop = null,
 backend: ?*c.wlr.wlr_backend = null,
@@ -24,16 +11,9 @@ allocator_wlr: ?*c.wlr.wlr_allocator = null,
 compositor: ?*c.wlr.wlr_compositor = null,
 xdg_shell: ?*c.wlr.wlr_xdg_shell = null,
 
-/// Socket name written by wlroots (e.g. "wayland-1").
 socket_name: [64]u8 = std.mem.zeroes([64]u8),
-
-/// Live surfaces, keyed by their wlr_surface pointer.
 surfaces: SurfaceMap,
-
-/// wlroots signal listeners.
 new_surface_listener: c.wlr.wl_listener = undefined,
-
-// ── gdzig class registration ──────────────────────────────────────────────
 
 pub fn register(r: *Registry) void {
     const class = r.createClass(WaylandCompositor, r.allocator, .auto);
@@ -57,8 +37,6 @@ pub fn pollWayland(self: *WaylandCompositor) void {
     self.collectDeadSurfaces();
 }
 
-// ── Lifecycle ─────────────────────────────────────────────────────────────
-
 pub fn create(allocator: *Allocator) !*WaylandCompositor {
     const self = try allocator.create(WaylandCompositor);
     self.* = .{
@@ -76,8 +54,6 @@ pub fn destroy(self: *WaylandCompositor, allocator: *Allocator) void {
     allocator.destroy(self);
 }
 
-// ── Godot callbacks ───────────────────────────────────────────────────────
-
 pub fn _ready(self: *WaylandCompositor) void {
     self.base.setProcess(true);
 
@@ -90,7 +66,6 @@ pub fn _exitTree(self: *WaylandCompositor) void {
     self.shutdownWayland();
 }
 
-/// Drive the Wayland event loop.  Called every frame by Godot.
 pub fn _process(self: *WaylandCompositor, _: f64) void {
     const display = self.display orelse {
         std.log.info("_process: display is null", .{});
@@ -101,46 +76,32 @@ pub fn _process(self: *WaylandCompositor, _: f64) void {
         return;
     };
 
-    // dispatch with 0 ms timeout — non-blocking, handle all pending events.
     _ = c.wlr.wl_event_loop_dispatch(el, 0);
     _ = c.wlr.wl_display_flush_clients(display);
     self.collectDeadSurfaces();
 }
 
-// ── Public API (exposed to GDScript) ─────────────────────────────────────
-
-/// Returns the WAYLAND_DISPLAY socket name, e.g. "wayland-1".
-/// Returns an empty String if the compositor is not yet running.
 pub fn getSocketName(self: *WaylandCompositor) String {
     const len = std.mem.indexOfScalar(u8, &self.socket_name, 0) orelse self.socket_name.len;
     return String.fromLatin1(self.socket_name[0..len]);
 }
 
-// ── Private: Wayland init / shutdown ─────────────────────────────────────
-
 fn initWayland(self: *WaylandCompositor) !void {
-    // Create the wl_display (Wayland server).
     const display = c.wlr.wl_display_create() orelse return error.DisplayCreateFailed;
     self.display = display;
 
-    // wlroots 0.19 changed wlr_headless_backend_create() to take wl_event_loop*
-    // instead of wl_display*, so we must retrieve the event loop first.
     const event_loop = c.wlr.wl_display_get_event_loop(display);
     self.event_loop = event_loop;
 
-    // Create a headless wlroots backend (no GPU device needed for SHM).
     const backend = c.wlr.wlr_headless_backend_create(event_loop) orelse return error.BackendCreateFailed;
     self.backend = backend;
 
-    // Create a no-op wlr_renderer (not used for SHM, but wlroots requires one).
     const renderer = c.wlr.wlr_renderer_autocreate(backend) orelse return error.RendererCreateFailed;
     self.renderer = renderer;
     _ = c.wlr.wlr_renderer_init_wl_display(renderer, display);
 
-    // Allocator (needed by compositor).
     self.allocator_wlr = c.wlr.wlr_allocator_autocreate(backend, renderer);
 
-    // Advertise wl_compositor and wl_shm globals to clients.
     self.compositor = c.wlr.wlr_compositor_create(display, 5, renderer);
     _ = c.wlr.wlr_subcompositor_create(display);
     _ = c.wlr.wlr_data_device_manager_create(display);
@@ -150,25 +111,20 @@ fn initWayland(self: *WaylandCompositor) !void {
     const headless_output = c.wlr.wlr_headless_add_output(backend, 1280, 720);
     _ = c.wlr.wlr_output_layout_add_auto(output_layout, headless_output);
 
-    // Enable output
     var state: c.wlr.wlr_output_state = undefined;
     c.wlr.wlr_output_state_init(&state);
     c.wlr.wlr_output_state_set_enabled(&state, true);
     _ = c.wlr.wlr_output_commit_state(headless_output, &state);
     c.wlr.wlr_output_state_finish(&state);
 
-    // wlroots 0.19 added an explicit formats_len argument to wlr_shm_create().
     _ = c.wlr.wlr_renderer_init_wl_shm(renderer, display);
 
-    // XDG Shell — handles modern Wayland application windows.
     const xdg_shell = c.wlr.wlr_xdg_shell_create(display, 3) orelse return error.XdgShellCreateFailed;
     self.xdg_shell = xdg_shell;
 
-    // Listen for new XDG surfaces (new application windows).
     self.new_surface_listener.notify = onNewXdgSurface;
     c.wlr.wl_signal_add(&xdg_shell.*.events.new_toplevel, &self.new_surface_listener);
 
-    // Start the backend and open a socket.
     if (!c.wlr.wlr_backend_start(backend)) return error.BackendStartFailed;
 
     const socket_cstr = c.wlr.wl_display_add_socket_auto(display) orelse return error.SocketFailed;
@@ -180,7 +136,6 @@ fn initWayland(self: *WaylandCompositor) !void {
 }
 
 fn shutdownWayland(self: *WaylandCompositor) void {
-    // Destroy all tracked surfaces.
     var it = self.surfaces.valueIterator();
     while (it.next()) |surf| {
         surf.*.destroy(self.allocator);
@@ -188,7 +143,6 @@ fn shutdownWayland(self: *WaylandCompositor) void {
     self.surfaces.deinit(self.allocator);
     self.surfaces = .{};
 
-    // Remove listener before destroying display
     if (self.xdg_shell != null) {
         c.wlr.wl_list_remove(&self.new_surface_listener.link);
         self.xdg_shell = null;
@@ -200,14 +154,12 @@ fn shutdownWayland(self: *WaylandCompositor) void {
     }
 }
 
-/// Remove surfaces whose wlr_surface was destroyed (marked dead in onDestroy).
 fn collectDeadSurfaces(self: *WaylandCompositor) void {
     var to_remove: std.array_list.Aligned(*c.wlr.wlr_surface, null) = .empty;
     defer to_remove.deinit(self.allocator);
 
     var it = self.surfaces.iterator();
     while (it.next()) |entry| {
-        // A surface is "dead" when we cleared its wlr_surface pointer in onDestroy.
         if (@intFromPtr(entry.value_ptr.*.wlr_surface) == 0) {
             entry.value_ptr.*.destroy(self.allocator);
             to_remove.append(self.allocator, entry.key_ptr.*) catch {};
@@ -218,17 +170,17 @@ fn collectDeadSurfaces(self: *WaylandCompositor) void {
     }
 }
 
-// ── wlroots signal callbacks ──────────────────────────────────────────────
-
-/// Called when an XDG toplevel (application window) is created.
 fn onNewXdgSurface(listener: [*c]c.wlr.wl_listener, data: ?*anyopaque) callconv(.c) void {
     const self = c.listenerParent(WaylandCompositor, "new_surface_listener", listener);
     const toplevel: *c.wlr.wlr_xdg_toplevel = @ptrCast(@alignCast(data orelse return));
     const wlr_surface = toplevel.*.base.*.surface;
 
+    std.log.info("onNewXdgSurface: new toplevel", .{});
+
     const surf = WaylandSurface.create(
         self.allocator,
         wlr_surface,
+        toplevel,
         .upcast(self.base),
     ) catch |err| {
         std.log.err("WaylandCompositor: failed to create surface: {}", .{err});
@@ -240,8 +192,6 @@ fn onNewXdgSurface(listener: [*c]c.wlr.wl_listener, data: ?*anyopaque) callconv(
         surf.destroy(self.allocator);
     };
 }
-
-// ── Imports ───────────────────────────────────────────────────────────────
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
