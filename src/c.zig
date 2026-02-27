@@ -1,0 +1,34 @@
+/// C imports for wlroots and wayland-server.
+/// Link requirements in build.zig:
+///   lib.linkSystemLibrary("wlroots");
+///   lib.linkSystemLibrary("wayland-server");
+pub const wl = @cImport({
+    @cInclude("wayland-server-core.h");
+    @cInclude("wayland-server-protocol.h");
+});
+
+pub const wlr = @cImport({
+    // Disable the wlroots log macro so it doesn't conflict with Zig's
+    @cDefine("WLR_USE_UNSTABLE", "1");
+    @cInclude("wlr/backend.h");
+    @cInclude("wlr/render/allocator.h");
+    @cInclude("wlr/render/wlr_renderer.h");
+    @cInclude("wlr/types/wlr_compositor.h");
+    @cInclude("wlr/types/wlr_shm.h");
+    @cInclude("wlr/types/wlr_xdg_shell.h");
+    @cInclude("wlr/types/wlr_buffer.h");
+    @cInclude("wlr/util/log.h");
+});
+
+/// Convenience: cast a wl_listener pointer back to its containing struct.
+/// This is the standard wlroots callback pattern.
+///
+/// Example:
+///   const self = listenerParent(MySurface, "commit_listener", listener);
+pub inline fn listenerParent(
+    comptime T: type,
+    comptime field: []const u8,
+    listener: *wl.wl_listener,
+) *T {
+    return @fieldParentPtr(field, listener);
+}

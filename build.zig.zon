@@ -1,0 +1,19 @@
+.{
+    .name = .gd4wlroots,
+    .version = "0.0.0",
+    .fingerprint = 0xa7c39f4779b6fbb8, // Changing this has security and trust implications.
+    .minimum_zig_version = "0.15.2",
+
+    .dependencies = .{
+        .gdzig = .{
+            .url = "https://github.com/gdzig/gdzig/archive/000b7d30aed8449ec4a2ded0578744a9f7599d1b.tar.gz",
+            .hash = "godot-0.0.0-dev-q0GYjq5eCAAZ7nsxni850oI_z75L-NOXeGp3W5V9eIAu",
+        },
+    },
+
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
