@@ -147,7 +147,15 @@ fn uploadBuffer(self: *WaylandSurface, buffer: *c.wlr.wlr_buffer) void {
 /// Called by wlroots whenever the client commits a new buffer.
 fn onCommit(listener: [*c]c.wlr.wl_listener, _: ?*anyopaque) callconv(.c) void {
     const self = c.listenerParent(WaylandSurface, "commit_listener", listener);
-    const surface_buffer = self.wlr_surface.*.buffer orelse return;
+
+    std.log.info("onCommit called", .{});
+
+    const surface_buffer = self.wlr_surface.*.buffer orelse {
+        std.log.info("onCommit: buffer is null", .{});
+        return;
+    };
+
+    std.log.info("onCommit: buffer fond, uploading", .{});
     self.uploadBuffer(&surface_buffer.*.base);
 }
 
