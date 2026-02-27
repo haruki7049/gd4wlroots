@@ -143,6 +143,20 @@ fn initWayland(self: *WaylandCompositor) !void {
     // Advertise wl_compositor and wl_shm globals to clients.
     self.compositor = c.wlr.wlr_compositor_create(display, 5, renderer);
     _ = c.wlr.wlr_subcompositor_create(display);
+    _ = c.wlr.wlr_data_device_manager_create(display);
+    _ = c.wlr.wlr_seat_create(display, "seat0");
+
+    const output_layout = c.wlr.wlr_output_layout_create(display) orelse return error.OutputLayoutCreateFailed;
+    const headless_output = c.wlr.wlr_headless_add_output(backend, 1280, 720);
+    _ = c.wlr.wlr_output_layout_add_auto(output_layout, headless_output);
+
+    // Enable output
+    var state: c.wlr.wlr_output_state = undefined;
+    c.wlr.wlr_output_state_init(&state);
+    c.wlr.wlr_output_state_set_enabled(&state, true);
+    _ = c.wlr.wlr_output_commit_state(headless_output, &state);
+    c.wlr.wlr_output_state_finish(&state);
+
     // wlroots 0.19 added an explicit formats_len argument to wlr_shm_create().
     _ = c.wlr.wlr_renderer_init_wl_shm(renderer, display);
 

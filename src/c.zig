@@ -5,7 +5,9 @@ pub const wlr = @cImport({
     @cInclude("wlr/backend/headless.h"); // provides wlr_headless_backend_create()
     @cInclude("wlr/render/allocator.h");
     @cInclude("wlr/render/wlr_renderer.h");
+    @cInclude("wlr/types/wlr_data_device.h");
     @cInclude("wlr/types/wlr_compositor.h");
+    @cInclude("wlr/types/wlr_output_layout.h");
     @cInclude("wlr/types/wlr_subcompositor.h");
     @cInclude("wlr/types/wlr_shm.h");
     @cInclude("wlr/types/wlr_xdg_shell.h");
