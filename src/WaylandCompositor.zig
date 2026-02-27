@@ -114,7 +114,10 @@ fn initWayland(self: *WaylandCompositor) !void {
 
     // Advertise wl_compositor and wl_shm globals to clients.
     self.compositor = c.wlr.wlr_compositor_create(display, 5, renderer);
-    _ = c.wlr.wlr_shm_create(display, 1, &[_]u32{c.wlr.WL_SHM_FORMAT_ARGB8888});
+    self.compositor = c.wlr.wlr_compositor_create(display, 5, renderer);
+    // wlroots 0.19 added an explicit formats_len argument to wlr_shm_create().
+    const shm_formats = [_]u32{c.wlr.WL_SHM_FORMAT_ARGB8888};
+    _ = c.wlr.wlr_shm_create(display, 1, &shm_formats, shm_formats.len);
 
     // XDG Shell — handles modern Wayland application windows.
     const xdg_shell = c.wlr.wlr_xdg_shell_create(display, 3) orelse return error.XdgShellCreateFailed;
@@ -122,10 +125,10 @@ fn initWayland(self: *WaylandCompositor) !void {
 
     // Listen for new XDG surfaces (new application windows).
     self.new_surface_listener.notify = onNewXdgSurface;
-    c.wlr.wl_signal_add(&xdg_shell.events.new_toplevel, &self.new_surface_listener);
+    c.wlr.wl_signal_add(&xdg_shell.*.events.new_toplevel, &self.new_surface_listener);
 
     // Start the backend and open a socket.
-    if (c.wlr.wlr_backend_start(backend) == 0) return error.BackendStartFailed;
+    if (!c.wlr.wlr_backend_start(backend)) return error.BackendStartFailed;
 
     const socket_cstr = c.wlr.wl_display_add_socket_auto(display) orelse return error.SocketFailed;
     const socket_slice = std.mem.span(socket_cstr);
@@ -171,10 +174,10 @@ fn collectDeadSurfaces(self: *WaylandCompositor) void {
 // ── wlroots signal callbacks ──────────────────────────────────────────────
 
 /// Called when an XDG toplevel (application window) is created.
-fn onNewXdgSurface(listener: [*c]c.wlr.wl_listener, data: ?*anyopaque) callconv(.C) void {
+fn onNewXdgSurface(listener: [*c]c.wlr.wl_listener, data: ?*anyopaque) callconv(.c) void {
     const self = c.listenerParent(WaylandCompositor, "new_surface_listener", listener);
     const toplevel: *c.wlr.wlr_xdg_toplevel = @ptrCast(@alignCast(data orelse return));
-    const wlr_surface = toplevel.base.surface;
+    const wlr_surface = toplevel.*.base.*.surface;
 
     const surf = WaylandSurface.create(
         self.allocator,

@@ -128,7 +128,7 @@ fn uploadShmBuffer(self: *WaylandSurface, buf: *c.wlr.wlr_shm_buffer) void {
 // ── wlroots signal callbacks ──────────────────────────────────────────────
 
 /// Called by wlroots whenever the client commits a new buffer.
-fn onCommit(listener: [*c]c.wlr.wl_listener, _: ?*anyopaque) callconv(.C) void {
+fn onCommit(listener: [*c]c.wlr.wl_listener, _: ?*anyopaque) callconv(.c) void {
     const self = c.listenerParent(WaylandSurface, "commit_listener", listener);
     const surface = self.wlr_surface;
 
@@ -143,7 +143,7 @@ fn onCommit(listener: [*c]c.wlr.wl_listener, _: ?*anyopaque) callconv(.C) void {
 /// Called by wlroots when the client destroys its surface.
 /// We cannot free ourselves here (we're inside a C callback), so we just
 /// mark ourselves as dead; WaylandCompositor cleans up on the next _process().
-fn onDestroy(listener: [*c]c.wlr.wl_listener, _: ?*anyopaque) callconv(.C) void {
+fn onDestroy(listener: [*c]c.wlr.wl_listener, _: ?*anyopaque) callconv(.c) void {
     const self = c.listenerParent(WaylandSurface, "destroy_listener", listener);
     // Detach listeners immediately to prevent double-fire.
     c.wlr.wl_list_remove(&self.commit_listener.link);
