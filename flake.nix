@@ -62,7 +62,7 @@
             buildInputs = [
               pkgs.wlroots
               pkgs.wayland
-              pkgs.wayland-protocols  # provides stable/xdg-shell/xdg-shell.xml
+              pkgs.wayland-protocols # provides stable/xdg-shell/xdg-shell.xml
               pkgs.pixman
               pkgs.libxkbcommon
             ];
