@@ -1,8 +1,8 @@
 /// WaylandSurface manages a single Wayland client surface.
 ///
 /// Each time the client commits a new SHM buffer, we:
-///   1. mmap the buffer pixels (they are already in CPU memory)
-///   2. memcpy into a Godot Image internal buffer  (one CPU copy)
+///   1. lock the buffer via wlr_buffer_begin_data_ptr_access()
+///   2. memcpy pixels into a Godot Image internal buffer  (one CPU copy)
 ///   3. call ImageTexture.update() to upload to GPU
 ///
 /// The resulting texture is displayed via an owned Sprite2D that is added
@@ -48,14 +48,15 @@ pub fn create(
 ) !*WaylandSurface {
     const self = try allocator.create(WaylandSurface);
 
-    // Create Godot objects
+    // Create Godot objects.
     const sprite = Sprite2D.init();
     const texture = ImageTexture.init();
     // Placeholder 1×1 image; real dimensions set on first commit.
     const image = Image.create(1, 1, false, .format_rgba8).?;
 
     texture.setImage(image);
-    sprite.setTexture(Texture2D.downcast(texture).?);
+    // ImageTexture IS-A Texture2D: use upcast (child → parent) not downcast.
+    sprite.setTexture(Texture2D.upcast(texture));
     parent.addChild(.upcast(sprite), .{});
 
     self.* = .{
@@ -84,7 +85,6 @@ pub fn destroy(self: *WaylandSurface, allocator: Allocator) void {
     c.wlr.wl_list_remove(&self.commit_listener.link);
     c.wlr.wl_list_remove(&self.destroy_listener.link);
 
-    // Clean up Godot resources
     self.sprite.destroy();
     if (self.texture.unreference()) self.texture.destroy();
     if (self.image.unreference()) self.image.destroy();
@@ -95,11 +95,33 @@ pub fn destroy(self: *WaylandSurface, allocator: Allocator) void {
 // ── Private: texture update ───────────────────────────────────────────────
 
 /// Copy the SHM buffer pixels into the Godot Image, then upload to GPU.
-fn uploadShmBuffer(self: *WaylandSurface, buf: *c.wlr.wlr_shm_buffer) void {
-    const w: u32 = @intCast(self.wlr_surface.current.width);
-    const h: u32 = @intCast(self.wlr_surface.current.height);
+///
+/// wlroots 0.19 removed wlr_shm_buffer_* helpers.  The unified replacement is
+/// wlr_buffer_begin_data_ptr_access() / wlr_buffer_end_data_ptr_access(), which
+/// works for any buffer type that supports CPU-side reads (including wl_shm).
+fn uploadBuffer(self: *WaylandSurface, buffer: *c.wlr.wlr_buffer) void {
+    var data: ?*anyopaque = null;
+    var format: u32 = 0;
+    var stride: usize = 0;
 
-    // Rebuild Image if the surface size changed.
+    // Lock the buffer for CPU read access.
+    // Returns false if the buffer type doesn't support data pointer access
+    // (e.g. a pure DMA-BUF with no CPU mapping).
+    if (!c.wlr.wlr_buffer_begin_data_ptr_access(
+        buffer,
+        c.wlr.WLR_BUFFER_DATA_PTR_ACCESS_READ,
+        &data,
+        &format,
+        &stride,
+    )) return;
+    defer c.wlr.wlr_buffer_end_data_ptr_access(buffer);
+
+    const w: u32 = @intCast(self.wlr_surface.*.current.width);
+    const h: u32 = @intCast(self.wlr_surface.*.current.height);
+
+    if (w == 0 or h == 0) return;
+
+    // Rebuild the scratch Image when the surface size changes.
     if (w != self.width or h != self.height) {
         if (self.image.unreference()) self.image.destroy();
         self.image = Image.create(@intCast(w), @intCast(h), false, .format_rgba8).?;
@@ -107,21 +129,16 @@ fn uploadShmBuffer(self: *WaylandSurface, buf: *c.wlr.wlr_shm_buffer) void {
         self.height = h;
     }
 
-    // Begin access to the SHM pixel data (locks the buffer for CPU read).
-    c.wlr.wlr_shm_buffer_begin_access(buf);
-    defer c.wlr.wlr_shm_buffer_end_access(buf);
-
-    const src_pixels: [*]const u8 = @ptrCast(buf.data);
-    const stride: u32 = @intCast(buf.stride);
     const byte_count = h * stride;
+    const src: [*]const u8 = @ptrCast(data.?);
 
-    // Get a writable pointer to the Image's internal pixel buffer.
-    // gdextension_interface exposes this as image_ptrw().
-    const dst_pixels = godot.raw.imagePtrw(self.image);
-    @memcpy(dst_pixels[0..byte_count], src_pixels[0..byte_count]);
+    // Write directly into the Image's internal pixel buffer via the
+    // gdextension_interface image_ptrw() function — no intermediate allocation.
+    const imagePtrw = godot.raw.imagePtrw orelse return;
+    const dst = imagePtrw(self.image);
+    @memcpy(dst[0..byte_count], src[0..byte_count]);
 
-    // Upload the modified Image to the GPU texture.
-    // ImageTexture.update() re-uses the existing GPU resource.
+    // Upload to GPU. ImageTexture.update() reuses the existing GPU resource.
     self.texture.update(self.image);
 }
 
@@ -130,27 +147,17 @@ fn uploadShmBuffer(self: *WaylandSurface, buf: *c.wlr.wlr_shm_buffer) void {
 /// Called by wlroots whenever the client commits a new buffer.
 fn onCommit(listener: [*c]c.wlr.wl_listener, _: ?*anyopaque) callconv(.c) void {
     const self = c.listenerParent(WaylandSurface, "commit_listener", listener);
-    const surface = self.wlr_surface;
-
-    // Only handle SHM buffers in this CPU-copy implementation.
-    // DMA-BUF support would be added here later via wlr_dmabuf_v1_buffer_try_from_buffer().
-    const buffer = surface.buffer orelse return;
-    const shm_buf = c.wlr.wlr_shm_buffer_try_from_buffer(buffer) orelse return;
-
-    self.uploadShmBuffer(shm_buf);
+    var buffer = self.wlr_surface.*.buffer.*.base;
+    self.uploadBuffer(&buffer);
 }
 
 /// Called by wlroots when the client destroys its surface.
-/// We cannot free ourselves here (we're inside a C callback), so we just
-/// mark ourselves as dead; WaylandCompositor cleans up on the next _process().
+/// Memory free is deferred to WaylandCompositor.collectDeadSurfaces().
 fn onDestroy(listener: [*c]c.wlr.wl_listener, _: ?*anyopaque) callconv(.c) void {
     const self = c.listenerParent(WaylandSurface, "destroy_listener", listener);
-    // Detach listeners immediately to prevent double-fire.
     c.wlr.wl_list_remove(&self.commit_listener.link);
     c.wlr.wl_list_remove(&self.destroy_listener.link);
-    // Hide the sprite so there is no visual artifact until GC.
     self.sprite.setVisible(false);
-    // NOTE: actual memory free happens in WaylandCompositor.collectDeadSurfaces().
     self.wlr_surface = undefined; // mark dead
 }
 
