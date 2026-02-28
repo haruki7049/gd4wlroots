@@ -10,6 +10,7 @@ renderer: ?*c.wlr.wlr_renderer = null,
 allocator_wlr: ?*c.wlr.wlr_allocator = null,
 compositor: ?*c.wlr.wlr_compositor = null,
 xdg_shell: ?*c.wlr.wlr_xdg_shell = null,
+seat: ?*c.wlr.wlr_seat = null,
 
 socket_name: [64]u8 = std.mem.zeroes([64]u8),
 surfaces: SurfaceMap,
@@ -82,7 +83,7 @@ fn initWayland(self: *WaylandCompositor) !void {
     self.compositor = c.wlr.wlr_compositor_create(display, 5, renderer);
     _ = c.wlr.wlr_subcompositor_create(display);
     _ = c.wlr.wlr_data_device_manager_create(display);
-    _ = c.wlr.wlr_seat_create(display, "seat0");
+    self.seat = c.wlr.wlr_seat_create(display, "seat0");
 
     const output_layout = c.wlr.wlr_output_layout_create(display) orelse return error.OutputLayoutCreateFailed;
     const headless_output = c.wlr.wlr_headless_add_output(backend, 1280, 720);
