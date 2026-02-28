@@ -95,10 +95,8 @@ fn uploadBuffer(self: *WaylandSurface, buffer: *c.wlr.wlr_buffer) void {
     const dst = imagePtrw(self.image);
     const src: [*]const u8 = @ptrCast(data.?);
 
-    var y: usize = 0;
-    while (y < h) : (y += 1) {
-        var x: usize = 0;
-        while (x < w) : (x += 1) {
+    for (0..h) |y| {
+        for (0..w) |x| {
             const src_off = y * stride + x * 4;
             const dst_off = (y * @as(usize, w) + x) * 4;
 
