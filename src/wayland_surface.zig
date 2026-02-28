@@ -219,7 +219,7 @@ fn uploadBuffer(self: *WaylandSurface, buffer: *c.wlr.wlr_buffer) void {
             dst[dst_off + 0] = src[src_off + 2]; // R
             dst[dst_off + 1] = src[src_off + 1]; // G
             dst[dst_off + 2] = src[src_off + 0]; // B
-            dst[dst_off + 3] = 255;               // A (fully opaque)
+            dst[dst_off + 3] = 255; // A (fully opaque)
         }
     }
 

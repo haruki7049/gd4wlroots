@@ -28,14 +28,14 @@ pub const wlr = @cImport({
 
     // --- wlroots Wayland protocol implementations ---
     // Each header implements one Wayland protocol global that clients can use.
-    @cInclude("wlr/types/wlr_data_device.h");   // clipboard / drag-and-drop
-    @cInclude("wlr/types/wlr_compositor.h");    // wl_surface management
+    @cInclude("wlr/types/wlr_data_device.h"); // clipboard / drag-and-drop
+    @cInclude("wlr/types/wlr_compositor.h"); // wl_surface management
     @cInclude("wlr/types/wlr_output_layout.h"); // logical screen arrangement
     @cInclude("wlr/types/wlr_subcompositor.h"); // wl_subsurface support
-    @cInclude("wlr/types/wlr_shm.h");           // shared-memory buffers (SHM)
-    @cInclude("wlr/types/wlr_xdg_shell.h");     // application windows (XDG Shell)
-    @cInclude("wlr/types/wlr_buffer.h");        // generic buffer access API
-    @cInclude("wlr/util/log.h");                // wlroots logging helpers
+    @cInclude("wlr/types/wlr_shm.h"); // shared-memory buffers (SHM)
+    @cInclude("wlr/types/wlr_xdg_shell.h"); // application windows (XDG Shell)
+    @cInclude("wlr/types/wlr_buffer.h"); // generic buffer access API
+    @cInclude("wlr/util/log.h"); // wlroots logging helpers
 
     // --- wayland-server ---
     // Core server types: wl_display, wl_event_loop, wl_listener, wl_signal …
