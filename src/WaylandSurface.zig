@@ -91,7 +91,7 @@ fn uploadBuffer(self: *WaylandSurface, buffer: *c.wlr.wlr_buffer) void {
         self.texture.setImage(self.image);
     }
 
-    const imagePtrw = godot.raw.imagePtrw orelse return;
+    const imagePtrw = godot.raw.imagePtrw orelse @panic("imagePtrw is null");
     const dst = imagePtrw(self.image);
     const src: [*]const u8 = @ptrCast(data.?);
 

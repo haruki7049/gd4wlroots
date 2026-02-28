@@ -54,6 +54,10 @@ pub fn _process(self: *WaylandCompositor, _: f64) void {
     self.collectDeadSurfaces();
 }
 
+pub fn _exitTree(self: *WaylandCompositor) void {
+    self.shutdownWayland();
+}
+
 pub fn getSocketName(self: *WaylandCompositor) String {
     const len = std.mem.indexOfScalar(u8, &self.socket_name, 0) orelse self.socket_name.len;
     return String.fromLatin1(self.socket_name[0..len]);
