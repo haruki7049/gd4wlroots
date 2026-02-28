@@ -81,8 +81,6 @@ fn uploadBuffer(self: *WaylandSurface, buffer: *c.wlr.wlr_buffer) void {
 
     if (w == 0 or h == 0) return;
 
-    std.log.info("uploadBuffer: w={} h={} stride={} format=0x{x}", .{ w, h, stride, format });
-
     if (w != self.width or h != self.height) {
         if (self.image.unreference()) self.image.destroy();
         self.image = Image.create(@intCast(w), @intCast(h), false, .format_rgba8).?;
@@ -108,12 +106,6 @@ fn uploadBuffer(self: *WaylandSurface, buffer: *c.wlr.wlr_buffer) void {
         }
     }
 
-    const mid_off = ((@as(usize, h) / 2) * @as(usize, w) + @as(usize, w) / 2) * 4;
-    std.log.info("pixel[0,0] RGBA=({},{},{},{}) pixel[center] RGBA=({},{},{},{})", .{
-        dst[0],       dst[1],           dst[2],           dst[3],
-        dst[mid_off], dst[mid_off + 1], dst[mid_off + 2], dst[mid_off + 3],
-    });
-
     self.texture.update(self.image);
 }
 
@@ -123,18 +115,13 @@ fn onCommit(listener: [*c]c.wlr.wl_listener, _: ?*anyopaque) callconv(.c) void {
     const xdg_surface = self.toplevel.*.base;
 
     if (xdg_surface.*.initial_commit) {
-        std.log.info("onCommit: initial commit, sending configure", .{});
         _ = c.wlr.wlr_xdg_toplevel_set_size(self.toplevel, 0, 0);
         _ = c.wlr.wlr_xdg_toplevel_set_activated(self.toplevel, true);
         return;
     }
 
-    const surface_buffer = self.wlr_surface.*.buffer orelse {
-        std.log.info("onCommit: buffer is null", .{});
-        return;
-    };
+    const surface_buffer = self.wlr_surface.*.buffer orelse return;
 
-    std.log.info("onCommit: buffer found, uploading", .{});
     self.uploadBuffer(&surface_buffer.*.base);
 
     var now: c.wlr.struct_timespec = .{ .tv_sec = 0, .tv_nsec = 0 };
