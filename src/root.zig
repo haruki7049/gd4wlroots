@@ -10,4 +10,4 @@ pub const gdwlroots_init = godot.init(.{
 
 const godot = @import("godot");
 const Registry = godot.extension.Registry;
-const WaylandCompositor = @import("WaylandCompositor.zig");
+const WaylandCompositor = @import("wayland_compositor.zig");

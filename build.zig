@@ -37,7 +37,7 @@ pub fn build(b: *std.Build) !void {
     });
 
     const mod = b.createModule(.{
-        .root_source_file = b.path("src/extension.zig"),
+        .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
         .single_threaded = single_threaded,

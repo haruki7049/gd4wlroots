@@ -381,7 +381,7 @@ const Node2D = godot.class.Node2d;
 const String = godot.builtin.String;
 
 const c = @import("c.zig");
-const WaylandSurface = @import("WaylandSurface.zig");
+const WaylandSurface = @import("wayland_surface.zig");
 
 /// Map from wlr_surface pointer to its WaylandSurface wrapper.
 /// The pointer is a stable key because wlroots never reuses a wlr_surface
